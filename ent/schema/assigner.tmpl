@@ -1,0 +1,194 @@
+{{ define "assigner" }}
+
+{{/* Add the base header for the generated file */}}
+{{ $pkg := base $.Config.Package }}
+{{ template "header" $ }}
+
+import (
+    "log"
+	"reflect"
+	"time"
+	"unicode"
+
+	"google.golang.org/protobuf/types/known/emptypb"
+	"google.golang.org/protobuf/types/known/timestamppb"
+)
+
+{{ range $n := $.Nodes }}
+    {{ $receiver := $n.Receiver }}
+    func ({{ $receiver }} *{{ $n.Name }}Create) Assign(message any) *{{ $n.Name }}Create {
+        if {{ $receiver }} == nil {
+            log.Printf("{{ $n.Name }}(nil)")
+            return {{ $receiver }}
+        }
+        
+        tp := reflect.TypeOf(message).Elem()
+        val := reflect.ValueOf(message).Elem()
+        m := reflect.ValueOf({{ $receiver }})
+
+        for i := 0; i < tp.NumField(); i++ {
+
+            fieldName := tp.Field(i).Name
+
+            if unicode.IsLower(rune(fieldName[0])) || fieldName == "Id" {
+                continue
+            }
+
+            method := m.MethodByName("Set" + fieldName)
+
+            if !method.IsValid() {
+                continue
+            }
+
+            t := tp.Field(i).Type
+
+            for t.Kind() == reflect.Ptr {
+                t = t.Elem()
+            }
+
+            rv := val.Field(i)
+            switch kind := t.Kind(); kind {
+            case reflect.Struct:
+                switch t.String(){
+                case "timestamppb.Timestamp":
+                    if rv.IsNil() {
+                        continue
+                    }
+
+                    time := rv.Interface().(interface {
+                        AsTime() time.Time
+                        IsValid() bool
+                    })
+
+                    rv = reflect.ValueOf(time.AsTime())
+                default:
+                    continue
+                }
+            default:
+
+            }
+
+            arg := []reflect.Value{rv}
+            method.Call(arg)
+        }
+        return {{ $receiver }}
+    }
+
+    func ({{ $receiver }} *{{ $n.Name }}Update) Assign(message any) *{{ $n.Name }}Update {
+        if {{ $receiver }} == nil {
+            log.Printf("{{ $n.Name }}(nil)")
+            return {{ $receiver }}
+        }
+        
+        tp := reflect.TypeOf(message).Elem()
+        val := reflect.ValueOf(message).Elem()
+        m := reflect.ValueOf({{ $receiver }})
+
+        for i := 0; i < tp.NumField(); i++ {
+
+            fieldName := tp.Field(i).Name
+
+            if unicode.IsLower(rune(fieldName[0])) || fieldName == "Id" {
+                continue
+            }
+
+            method := m.MethodByName("Set" + fieldName)
+
+            if !method.IsValid() {
+                continue
+            }
+
+            t := tp.Field(i).Type
+
+            for t.Kind() == reflect.Ptr {
+                t = t.Elem()
+            }
+
+            rv := val.Field(i)
+            switch kind := t.Kind(); kind {
+            case reflect.Struct:
+                switch t.String(){
+                case "timestamppb.Timestamp":
+                    if rv.IsNil() {
+                        continue
+                    }
+
+                    time := rv.Interface().(interface {
+                        AsTime() time.Time
+                        IsValid() bool
+                    })
+
+                    rv = reflect.ValueOf(time.AsTime())
+                default:
+                    continue
+                }
+            default:
+
+            }
+
+            arg := []reflect.Value{rv}
+            method.Call(arg)
+        }
+        return {{ $receiver }}
+    }
+
+    func ({{ $receiver }} *{{ $n.Name }}UpdateOne) Assign(message any) *{{ $n.Name }}UpdateOne {
+        if {{ $receiver }} == nil {
+            log.Printf("{{ $n.Name }}(nil)")
+            return {{ $receiver }}
+        }
+        
+        tp := reflect.TypeOf(message).Elem()
+        val := reflect.ValueOf(message).Elem()
+        m := reflect.ValueOf({{ $receiver }})
+
+        for i := 0; i < tp.NumField(); i++ {
+
+            fieldName := tp.Field(i).Name
+
+            if unicode.IsLower(rune(fieldName[0])) || fieldName == "Id" {
+                continue
+            }
+
+            method := m.MethodByName("Set" + fieldName)
+
+            if !method.IsValid() {
+                continue
+            }
+
+            t := tp.Field(i).Type
+
+            for t.Kind() == reflect.Ptr {
+                t = t.Elem()
+            }
+
+            rv := val.Field(i)
+            switch kind := t.Kind(); kind {
+            case reflect.Struct:
+                switch t.String(){
+                case "timestamppb.Timestamp":
+                    if rv.IsNil() {
+                        continue
+                    }
+
+                    time := rv.Interface().(interface {
+                        AsTime() time.Time
+                        IsValid() bool
+                    })
+
+                    rv = reflect.ValueOf(time.AsTime())
+                default:
+                    continue
+                }
+            default:
+
+            }
+
+            arg := []reflect.Value{rv}
+            method.Call(arg)
+        }
+        return {{ $receiver }}
+    }
+{{ end }}
+
+{{ end }}

@@ -1,0 +1,25 @@
+{{ define "seacher" }}
+
+{{/* Add the base header for the generated file */}}
+{{ $pkg := base $.Config.Package }}
+{{ template "header" $ }}
+
+import (
+    "log"
+	"reflect"
+	"time"
+	"unicode"
+
+	"google.golang.org/protobuf/types/known/emptypb"
+	"google.golang.org/protobuf/types/known/timestamppb"
+)
+
+{{ range $n := $.Nodes }}
+    {{ $receiver := $n.Receiver }}
+    func (c *{{ $n.Name }}Client) Predicate(query_func func(*sql.Selector)) predicate.{{ $n.Name }} {
+        return predicate.{{ $n.Name }}(query_func)
+    }
+    
+{{ end }}
+
+{{ end }}

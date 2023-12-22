@@ -1,0 +1,25 @@
+syntax = "proto3";
+
+package pb;
+
+option go_package = "proto/pb;proto";
+
+message DeleteRequest {
+  int64 id = 1;
+}
+
+message DeleteMultiRequest {
+  int64 id = 1;
+}
+
+message ListRequest {
+  int32 size = 1;
+  int32 page = 2;
+  repeated ListSearchParams params =3;
+}
+
+message ListSearchParams{
+    string field =1;
+    string operator =2;
+    repeated string value=3;
+}
