@@ -2,8 +2,11 @@ package service
 
 import (
 	"context"
+	"encoding/csv"
+	"fmt"
 	"grpc/helpers/strh"
 	pb "grpc/proto"
+	"grpc/provider/export"
 	"reflect"
 	"strings"
 
@@ -45,14 +48,11 @@ func (l *List[T]) Request(r *pb.ListRequest) *List[T] {
 	for i := 0; i < len(r.Params); i++ {
 		p := r.Params[i]
 
-		var fieldName string
-		var relation string
+		fieldName := p.Field
+		relation := "origin"
 
 		arr := strings.Split(p.Field, ".")
-		if len(arr) == 1 {
-			fieldName = arr[0]
-			relation = "origin"
-		} else {
+		if len(arr) == 2 {
 			fieldName = arr[1]
 			relation = arr[0]
 		}
@@ -167,7 +167,69 @@ func (l *List[T]) Get(ctx context.Context) []*T {
 	return ToMessageArr[T](l.QueryReflect.Interface())
 }
 
-func (l *List[T]) Export(ctx context.Context) {
+func (l *List[T]) Export(ctx context.Context, field []map[string]any) string {
+	l = l.SelectFields(ctx)
+	//执行查询
 	l.QueryReflect = l.QueryReflect.MethodByName("All").Call([]reflect.Value{reflect.ValueOf(ctx)})[0]
 
+	er := export.New("", export.CSV)
+
+	//异步导出
+	go func() {
+		w := csv.NewWriter(er.File)
+		records := make([][]string, l.QueryReflect.Len()+1)
+
+		for _, v := range field {
+			name := v["name"].(string)
+			label, ok := v["label"]
+			if !ok {
+				label = name
+			}
+			records[0] = append(records[0], fmt.Sprint(label))
+
+			for is := 0; is < l.QueryReflect.Len(); is++ {
+
+				fieldName := name
+				relation := "origin"
+				arr := strings.Split(name, ".")
+				if len(arr) == 2 {
+					fieldName = arr[1]
+					relation = arr[0]
+				}
+
+				if fieldName == "id" {
+					fieldName = "ID"
+				}
+
+				var f reflect.Value
+				if relation == "origin" {
+					f = l.QueryReflect.Index(is).Elem().FieldByName(strh.FromSnake(fieldName))
+				} else {
+					f = l.QueryReflect.Index(is).Elem().FieldByName("Edges").FieldByName(strh.FromSnake(relation)).Elem().FieldByName(strh.FromSnake(fieldName))
+				}
+
+				if !f.IsValid() || f.IsZero() {
+					records[is+1] = append(records[is+1], "")
+					continue
+				}
+
+				value := fmt.Sprint(f.Interface())
+
+				options, ok := v["options"]
+				if ok {
+					if o, ok := options.(map[string]string)[value]; ok {
+						value = o
+					}
+				}
+
+				records[is+1] = append(records[is+1], value)
+			}
+		}
+
+		w.WriteAll(records)
+
+		er.Finish()
+	}()
+
+	return er.Code
 }

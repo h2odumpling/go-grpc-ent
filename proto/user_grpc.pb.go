@@ -29,6 +29,7 @@ type UserServiceClient interface {
 	Delete(ctx context.Context, in *DeleteRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
 	List(ctx context.Context, in *ListRequest, opts ...grpc.CallOption) (*ListUserResponse, error)
 	BatchCreate(ctx context.Context, in *BatchCreateUsersRequest, opts ...grpc.CallOption) (*BatchCreateUsersResponse, error)
+	Export(ctx context.Context, in *ListRequest, opts ...grpc.CallOption) (*ExportResponse, error)
 }
 
 type userServiceClient struct {
@@ -93,6 +94,15 @@ func (c *userServiceClient) BatchCreate(ctx context.Context, in *BatchCreateUser
 	return out, nil
 }
 
+func (c *userServiceClient) Export(ctx context.Context, in *ListRequest, opts ...grpc.CallOption) (*ExportResponse, error) {
+	out := new(ExportResponse)
+	err := c.cc.Invoke(ctx, "/pb.UserService/Export", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // UserServiceServer is the server API for UserService service.
 // All implementations must embed UnimplementedUserServiceServer
 // for forward compatibility
@@ -103,6 +113,7 @@ type UserServiceServer interface {
 	Delete(context.Context, *DeleteRequest) (*emptypb.Empty, error)
 	List(context.Context, *ListRequest) (*ListUserResponse, error)
 	BatchCreate(context.Context, *BatchCreateUsersRequest) (*BatchCreateUsersResponse, error)
+	Export(context.Context, *ListRequest) (*ExportResponse, error)
 	mustEmbedUnimplementedUserServiceServer()
 }
 
@@ -127,6 +138,9 @@ func (UnimplementedUserServiceServer) List(context.Context, *ListRequest) (*List
 }
 func (UnimplementedUserServiceServer) BatchCreate(context.Context, *BatchCreateUsersRequest) (*BatchCreateUsersResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method BatchCreate not implemented")
+}
+func (UnimplementedUserServiceServer) Export(context.Context, *ListRequest) (*ExportResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Export not implemented")
 }
 func (UnimplementedUserServiceServer) mustEmbedUnimplementedUserServiceServer() {}
 
@@ -249,6 +263,24 @@ func _UserService_BatchCreate_Handler(srv interface{}, ctx context.Context, dec 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _UserService_Export_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(UserServiceServer).Export(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/pb.UserService/Export",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(UserServiceServer).Export(ctx, req.(*ListRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // UserService_ServiceDesc is the grpc.ServiceDesc for UserService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -279,6 +311,10 @@ var UserService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "BatchCreate",
 			Handler:    _UserService_BatchCreate_Handler,
+		},
+		{
+			MethodName: "Export",
+			Handler:    _UserService_Export_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

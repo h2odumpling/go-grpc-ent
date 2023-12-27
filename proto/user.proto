@@ -79,4 +79,6 @@ service UserService {
   rpc List ( ListRequest ) returns ( ListUserResponse );
 
   rpc BatchCreate ( BatchCreateUsersRequest ) returns ( BatchCreateUsersResponse );
+
+  rpc Export (ListRequest) returns (ExportResponse);
 }

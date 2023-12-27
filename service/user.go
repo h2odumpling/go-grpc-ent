@@ -4,7 +4,6 @@ import (
 	"context"
 	"grpc/ent"
 	"grpc/ent/user"
-	"grpc/ent/userinfo"
 	pb "grpc/proto"
 	"grpc/provider/db"
 	"reflect"
@@ -16,13 +15,7 @@ type UserService struct {
 	pb.UnimplementedUserServiceServer
 }
 
-var thisModel *ent.UserClient
-
-// func init() {
-// 	thisModel = db.Db().User
-// }
-
-func (UserService) Create(ctx context.Context, r *pb.CreateUserRequest) (*pb.User, error) {
+func (s *UserService) Create(ctx context.Context, r *pb.CreateUserRequest) (*pb.User, error) {
 	if r != nil {
 		model := db.Db().User.Create().Assign(r.User).SaveX(ctx)
 
@@ -35,13 +28,13 @@ func (UserService) Create(ctx context.Context, r *pb.CreateUserRequest) (*pb.Use
 	return &pb.User{}, nil
 }
 
-func (UserService) Get(ctx context.Context, r *pb.GetUserRequest) (*pb.User, error) {
+func (s *UserService) Get(ctx context.Context, r *pb.GetUserRequest) (*pb.User, error) {
 	model := db.Db().User.Query().Where(user.IDEQ(int(r.Id))).WithInfo().FirstX(ctx)
 
 	return ToMessage[pb.User](model), nil
 }
 
-func (UserService) Update(ctx context.Context, r *pb.UpdateUserRequest) (*pb.User, error) {
+func (s *UserService) Update(ctx context.Context, r *pb.UpdateUserRequest) (*pb.User, error) {
 	if r != nil {
 		model := db.Db().User.Query().Where(user.IDEQ(int(r.User.Id))).WithInfo().FirstX(ctx)
 		info_model := model.Edges.Info.Update().Assign(r.User.Info).SaveX(ctx)
@@ -54,9 +47,8 @@ func (UserService) Update(ctx context.Context, r *pb.UpdateUserRequest) (*pb.Use
 	return &pb.User{}, nil
 }
 
-func (UserService) Delete(ctx context.Context, r *pb.DeleteRequest) (*emptypb.Empty, error) {
+func (s *UserService) Delete(ctx context.Context, r *pb.DeleteRequest) (*emptypb.Empty, error) {
 	db.Db().User.DeleteOneID(int(r.Id)).ExecX(ctx)
-	db.Db().UserInfo.Delete().Where(userinfo.UserIDEQ(int(r.Id))).ExecX(ctx)
 	return nil, nil
 }
 
@@ -74,7 +66,32 @@ func (s *UserService) List(ctx context.Context, r *pb.ListRequest) (*pb.ListUser
 	return &pb.ListUserResponse{UserList: list}, nil
 }
 
-func (UserService) BatchCreate(ctx context.Context, r *pb.BatchCreateUsersRequest) (*pb.BatchCreateUsersResponse, error) {
+func (s *UserService) Export(ctx context.Context, r *pb.ListRequest) (*pb.ExportResponse, error) {
+	code := NewList[pb.User](Config{
+		Model: db.Db().User,
+		Join:  map[string]string{"info": "user"},
+	}).
+		Request(r).
+		Query(func(v reflect.Value) any {
+			return v.Interface().(*ent.UserQuery).Where(user.HasInfo())
+		}).
+		Export(ctx, []map[string]any{
+			{"name": "id", "label": "ID"},
+			{"name": "username", "label": "用户名"},
+			{"name": "nickname", "label": "昵称"},
+			{"name": "created_at", "label": "创建时间"},
+			{"name": "updated_at", "label": "更新时间"},
+			{"name": "deleted_at", "label": "删除时间"},
+			{"name": "info.address", "label": "详细地址"},
+		})
+
+	return &pb.ExportResponse{
+		Code: code,
+		Ext:  "csv",
+	}, nil
+}
+
+func (s *UserService) BatchCreate(ctx context.Context, r *pb.BatchCreateUsersRequest) (*pb.BatchCreateUsersResponse, error) {
 	model := db.Db().User.MapCreateBulk(r.Requests, func(uc *ent.UserCreate, i int) {
 		uc.Assign(r.Requests[i].User)
 	}).SaveX(ctx)

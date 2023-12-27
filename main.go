@@ -7,6 +7,7 @@ import (
 	"net"
 
 	pb "grpc/proto"
+	"grpc/provider/cache"
 	"grpc/provider/db"
 	"grpc/service"
 
@@ -16,6 +17,8 @@ import (
 func init() {
 	db.Setup()
 	db.AutoMigrate()
+
+	cache.Setup()
 }
 
 var (
