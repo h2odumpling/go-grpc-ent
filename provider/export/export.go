@@ -31,11 +31,12 @@ const (
 type Export struct {
 	File     *os.File
 	Code     string
-	Status   int
+	Status   int32
 	Path     string
 	FileName string
 	FullName string
 	Ext      string
+	Size     int64
 }
 
 func (e *Export) MarshalBinary() (data []byte, err error) {
@@ -47,26 +48,25 @@ func (e *Export) MarshalBinary() (data []byte, err error) {
 	b.WriteString(e.FileName)
 	b.WriteByte('\t')
 	b.WriteString(e.Ext)
+	b.WriteByte('\t')
+	b.WriteString(fmt.Sprint(e.Size))
 	return b.Bytes(), nil
 }
 
 func (e *Export) UnmarshalBinary(data []byte) error {
 	results := bytes.Split(data, []byte{'\t'})
-	if len(results) != 4 {
+	if len(results) != 5 {
 		return errors.New("not valid format")
 	}
-	e.Status, _ = strconv.Atoi(string(results[0]))
+	i, _ := strconv.Atoi(string(results[0]))
+	e.Status = int32(i)
 	e.Path = string(results[1])
 	e.FileName = string(results[2])
 	e.Ext = string(results[3])
+	i, _ = strconv.Atoi(string(results[4]))
+	e.Size = int64(i)
 
 	e.FullName = fmt.Sprintf("%v.%v", e.FileName, e.Ext)
-
-	var err error
-	e.File, err = os.Open(fmt.Sprintf("%v/%v", e.Path, e.FullName))
-	if err != nil {
-		panic(err)
-	}
 
 	return nil
 }
@@ -100,6 +100,7 @@ func New(filename string, ext string) *Export {
 			FileName: filename,
 			FullName: fmt.Sprintf("%v.%v", filename, ext),
 			Ext:      ext,
+			Size:     0,
 		}
 
 		//创建记录
@@ -125,9 +126,26 @@ func Get(code string) *Export {
 	return e
 }
 
+func (e *Export) Open() *Export {
+	if e.File != nil {
+		return e
+	}
+
+	var err error
+	e.File, err = os.Open(fmt.Sprintf("%v/%v", e.Path, e.FullName))
+	if err != nil {
+		panic(err)
+	}
+
+	return e
+}
+
 func (e *Export) Finish() {
+	fi, _ := e.File.Stat()
+
 	//更新记录
 	e.Status = StatusFinished
+	e.Size = fi.Size()
 	cache.Cache().Set(context.Background(), e.Code, e, expiration)
 
 	defer e.File.Close()

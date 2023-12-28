@@ -34,6 +34,7 @@ func main() {
 	s := grpc.NewServer()
 
 	pb.RegisterUserServiceServer(s, new(service.UserService))
+	pb.RegisterFileServiceServer(s, new(service.FileService))
 
 	log.Printf("server listening at %v", lis.Addr())
 	if err := s.Serve(lis); err != nil {

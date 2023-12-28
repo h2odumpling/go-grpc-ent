@@ -20,6 +20,7 @@ type List[T any] struct {
 	Config       Config
 	Size         int //单页大小
 	Page         int //页号
+	Errors       []error
 }
 
 type Config struct {
@@ -63,7 +64,7 @@ func (l *List[T]) Request(r *pb.ListRequest) *List[T] {
 		// }
 
 		if _, ok := l.Config.Join[relation]; !ok && relation != "origin" {
-			panic(status.Errorf(codes.InvalidArgument, "invalid field %v", p.Field))
+			l.Errors = append(l.Errors, status.Errorf(codes.InvalidArgument, "invalid field %v", p.Field))
 		} else {
 			switch p.Operator {
 			case "=":
@@ -93,7 +94,7 @@ func (l *List[T]) Request(r *pb.ListRequest) *List[T] {
 				query_func[relation] = append(query_func[relation], sql.FieldLTE(fieldName, p.Value[1]))
 			default:
 				//返回过滤器err 可在上方统一过滤
-				panic(status.Errorf(codes.InvalidArgument, "%v don't have operator %v", p.Field, p.Operator))
+				l.Errors = append(l.Errors, status.Errorf(codes.InvalidArgument, "%v don't have operator %v", p.Field, p.Operator))
 			}
 		}
 	}
@@ -154,7 +155,12 @@ func (l *List[T]) SelectFields(ctx context.Context) *List[T] {
 }
 
 // sql执行方法
-func (l *List[T]) Get(ctx context.Context) []*T {
+func (l *List[T]) Get(ctx context.Context) ([]*T, error) {
+
+	if len(l.Errors) > 0 {
+		return nil, l.Errors[0]
+	}
+
 	l = l.SelectFields(ctx)
 
 	//分页
@@ -164,10 +170,15 @@ func (l *List[T]) Get(ctx context.Context) []*T {
 	l.QueryReflect = l.QueryReflect.MethodByName("All").Call([]reflect.Value{reflect.ValueOf(ctx)})[0]
 
 	//把模型转换为grpc输出
-	return ToMessageArr[T](l.QueryReflect.Interface())
+	return ToMessageArr[T](l.QueryReflect.Interface()), nil
 }
 
-func (l *List[T]) Export(ctx context.Context, field []map[string]any) string {
+func (l *List[T]) Export(ctx context.Context, field []map[string]any) (string, error) {
+
+	if len(l.Errors) > 0 {
+		return "", l.Errors[0]
+	}
+
 	l = l.SelectFields(ctx)
 	//执行查询
 	l.QueryReflect = l.QueryReflect.MethodByName("All").Call([]reflect.Value{reflect.ValueOf(ctx)})[0]
@@ -205,7 +216,10 @@ func (l *List[T]) Export(ctx context.Context, field []map[string]any) string {
 				if relation == "origin" {
 					f = l.QueryReflect.Index(is).Elem().FieldByName(strh.FromSnake(fieldName))
 				} else {
-					f = l.QueryReflect.Index(is).Elem().FieldByName("Edges").FieldByName(strh.FromSnake(relation)).Elem().FieldByName(strh.FromSnake(fieldName))
+					f = l.QueryReflect.Index(is).Elem().FieldByName("Edges").FieldByName(strh.FromSnake(relation)).Elem()
+					if f.IsValid() && !f.IsZero() {
+						f = f.FieldByName(strh.FromSnake(fieldName))
+					}
 				}
 
 				if !f.IsValid() || f.IsZero() {
@@ -231,5 +245,5 @@ func (l *List[T]) Export(ctx context.Context, field []map[string]any) string {
 		er.Finish()
 	}()
 
-	return er.Code
+	return er.Code, nil
 }

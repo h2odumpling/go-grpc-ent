@@ -8,6 +8,8 @@ import (
 	"grpc/provider/db"
 	"reflect"
 
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
@@ -17,43 +19,73 @@ type UserService struct {
 
 func (s *UserService) Create(ctx context.Context, r *pb.CreateUserRequest) (*pb.User, error) {
 	if r != nil {
-		model := db.Db().User.Create().Assign(r.User).SaveX(ctx)
+		tx, _ := db.Db().Tx(ctx)
 
-		info_model := db.Db().UserInfo.Create().SetUser(model).Assign(r.User.Info).SaveX(ctx)
+		var model *ent.User
+		var info_model *ent.UserInfo
+		var err error
 
-		model.Edges.Info = info_model
+		if model, err = db.Db().User.Create().Assign(r.User).Save(ctx); err == nil {
+			if info_model, err = db.Db().UserInfo.Create().SetUser(model).Assign(r.User.Info).Save(ctx); err == nil {
+				model.Edges.Info = info_model
+				return ToMessage[pb.User](model), nil
+			}
+		}
 
-		return ToMessage[pb.User](model), nil
+		tx.Rollback()
+		return nil, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
 	return &pb.User{}, nil
 }
 
 func (s *UserService) Get(ctx context.Context, r *pb.GetUserRequest) (*pb.User, error) {
-	model := db.Db().User.Query().Where(user.IDEQ(int(r.Id))).WithInfo().FirstX(ctx)
 
-	return ToMessage[pb.User](model), nil
+	var model *ent.User
+	var err error
+
+	if model, err = db.Db().User.Query().Where(user.IDEQ(int(r.Id))).WithInfo().First(ctx); err == nil {
+		return ToMessage[pb.User](model), nil
+	}
+
+	return nil, status.Errorf(codes.InvalidArgument, "%v", err)
 }
 
 func (s *UserService) Update(ctx context.Context, r *pb.UpdateUserRequest) (*pb.User, error) {
 	if r != nil {
-		model := db.Db().User.Query().Where(user.IDEQ(int(r.User.Id))).WithInfo().FirstX(ctx)
-		info_model := model.Edges.Info.Update().Assign(r.User.Info).SaveX(ctx)
-		model = db.Db().User.UpdateOneID(int(r.User.Id)).Assign(r.User).SaveX(ctx)
 
-		model.Edges.Info = info_model
+		tx, _ := db.Db().Tx(ctx)
 
-		return ToMessage[pb.User](model), nil
+		var model *ent.User
+		var info_model *ent.UserInfo
+		var err error
+
+		if model, err = db.Db().User.Query().Where(user.IDEQ(int(r.User.Id))).WithInfo().First(ctx); err == nil {
+			if info_model, err = model.Edges.Info.Update().Assign(r.User.Info).Save(ctx); err == nil {
+				if model, err = db.Db().User.UpdateOneID(int(r.User.Id)).Assign(r.User).Save(ctx); err == nil {
+					model.Edges.Info = info_model
+					return ToMessage[pb.User](model), nil
+				}
+
+			}
+		}
+		tx.Rollback()
+		return nil, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
 	return &pb.User{}, nil
 }
 
 func (s *UserService) Delete(ctx context.Context, r *pb.DeleteRequest) (*emptypb.Empty, error) {
-	db.Db().User.DeleteOneID(int(r.Id)).ExecX(ctx)
-	return nil, nil
+	err := db.Db().User.DeleteOneID(int(r.Id)).Exec(ctx)
+
+	if err == nil {
+		return nil, nil
+	}
+
+	return nil, status.Errorf(codes.InvalidArgument, "%v", err)
 }
 
 func (s *UserService) List(ctx context.Context, r *pb.ListRequest) (*pb.ListUserResponse, error) {
-	list := NewList[pb.User](Config{
+	list, err := NewList[pb.User](Config{
 		Model: db.Db().User,
 		Join:  map[string]string{"info": "user"},
 	}).
@@ -63,11 +95,15 @@ func (s *UserService) List(ctx context.Context, r *pb.ListRequest) (*pb.ListUser
 		}).
 		Get(ctx)
 
+	if err != nil {
+		return nil, err
+	}
+
 	return &pb.ListUserResponse{UserList: list}, nil
 }
 
 func (s *UserService) Export(ctx context.Context, r *pb.ListRequest) (*pb.ExportResponse, error) {
-	code := NewList[pb.User](Config{
+	code, err := NewList[pb.User](Config{
 		Model: db.Db().User,
 		Join:  map[string]string{"info": "user"},
 	}).
@@ -84,6 +120,10 @@ func (s *UserService) Export(ctx context.Context, r *pb.ListRequest) (*pb.Export
 			{"name": "deleted_at", "label": "删除时间"},
 			{"name": "info.address", "label": "详细地址"},
 		})
+
+	if err != nil {
+		return nil, err
+	}
 
 	return &pb.ExportResponse{
 		Code: code,
