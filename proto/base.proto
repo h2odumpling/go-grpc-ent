@@ -4,6 +4,8 @@ package pb;
 
 option go_package = "proto/pb;proto";
 
+message Empty{}
+
 message DeleteRequest {
   int64 id = 1;
 }

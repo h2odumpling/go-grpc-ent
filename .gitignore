@@ -1,3 +1,5 @@
 ent/*
+.idea/
+public/export/
 
 !ent/schema

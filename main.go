@@ -7,6 +7,7 @@ import (
 	"net"
 
 	pb "grpc/proto"
+	"grpc/provider/auth"
 	"grpc/provider/cache"
 	"grpc/provider/db"
 	"grpc/service"
@@ -31,10 +32,15 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to listen: %v", err)
 	}
-	s := grpc.NewServer()
+	s := grpc.NewServer(
+		grpc.ChainUnaryInterceptor(
+			auth.UnaryServerInterceptor(),
+		),
+	)
 
 	pb.RegisterUserServiceServer(s, new(service.UserService))
 	pb.RegisterFileServiceServer(s, new(service.FileService))
+	pb.RegisterAuthServiceServer(s, new(service.AuthService))
 
 	log.Printf("server listening at %v", lis.Addr())
 	if err := s.Serve(lis); err != nil {
